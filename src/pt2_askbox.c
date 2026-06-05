@@ -1,6 +1,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include "pt2_textout.h"
 #include "pt2_visuals.h"
 #include "pt2_mouse.h"
@@ -448,6 +451,14 @@ uint32_t askBox(uint32_t dialogType, const char *statusText)
 		renderFrame2();
 		flipFrame();
 		endFPSCounter();
+
+#ifdef __EMSCRIPTEN__
+		// This modal loop blocks the single-threaded main loop. Yield to the
+		// browser each frame (needs ASYNCIFY) so DOM input reaches SDL, audio
+		// keeps running, and the dialog is actually interactive instead of
+		// freezing the page.
+		emscripten_sleep(15);
+#endif
 	}
 
 	mouse.leftButtonPressed = false;

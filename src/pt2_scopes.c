@@ -307,6 +307,10 @@ static int32_t scopeThreadFunc(void *ptr)
 
 bool initScopes(void)
 {
+#ifdef __EMSCRIPTEN__
+	// WebAssembly without pthreads: scopes will run in the main loop
+	scopeThread = NULL;
+#else
 	scopeThread = SDL_CreateThread(scopeThreadFunc, "scope thread", NULL);
 	if (scopeThread == NULL)
 	{
@@ -315,6 +319,7 @@ bool initScopes(void)
 	}
 
 	SDL_DetachThread(scopeThread);
+#endif
 	return true;
 }
 

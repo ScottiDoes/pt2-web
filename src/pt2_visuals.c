@@ -1991,6 +1991,11 @@ bool setupVideo(void)
 	video.dMonitorRefreshRate = (double)dm.refresh_rate;
 
 	video.vsync60HzPresent = false;
+#ifndef __EMSCRIPTEN__
+	// Under WASM the browser's requestAnimationFrame already paces us to the
+	// display's vsync. Requesting SDL_RENDERER_PRESENTVSYNC there makes SDL
+	// spam "emscripten_set_main_loop_timing" errors every present (we drive
+	// our own rAF loop, not emscripten_set_main_loop), so skip it.
 	if (!config.vsyncOff)
 	{
 		if (dm.refresh_rate >= 59 && dm.refresh_rate <= 61)
@@ -1999,6 +2004,7 @@ bool setupVideo(void)
 			rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
 		}
 	}
+#endif
 
 	uint32_t windowFlags = SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI;
 

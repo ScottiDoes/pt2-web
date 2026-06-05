@@ -371,6 +371,16 @@ static void audioCallback(void *userdata, Uint8 *stream, int len)
 		if (samplesToMix > audio.tickSampleCounter)
 			samplesToMix = audio.tickSampleCounter;
 
+#ifdef __EMSCRIPTEN__
+		// This whole app is single-threaded under WASM, so if this callback
+		// ever fails to make forward progress it freezes the entire page
+		// (and the last audio buffer loops forever). That happens if the tick
+		// counter is 0 and can't be refilled (e.g. samplesPerTickInt == 0),
+		// making samplesToMix 0 so samplesLeft never decreases. Force progress.
+		if (samplesToMix == 0)
+			samplesToMix = samplesLeft; // forward progress: avoids an infinite callback if the tick counter stalls
+#endif
+
 		outputAudio(streamOut, samplesToMix);
 		streamOut += samplesToMix * 2; // *2 for stereo
 

@@ -294,6 +294,17 @@ void readMouseXY(void)
 	}
 	else
 	{
+#ifdef __EMSCRIPTEN__
+		// In the browser there is no desktop coordinate space or OS window
+		// position: SDL_GetGlobalMouseState()/SDL_GetWindowPosition() are not
+		// functional under Emscripten and return 0. Use the canvas-relative
+		// mouse state instead (already corrected for CSS scaling by the SDL2
+		// emscripten port).
+		mouse.buttonState = SDL_GetMouseState(&mx, &my);
+
+		mouse.absX = mx;
+		mouse.absY = my;
+#else
 		mouse.buttonState = SDL_GetGlobalMouseState(&mx, &my);
 
 		mouse.absX = mx;
@@ -304,6 +315,7 @@ void readMouseXY(void)
 
 		mx -= windowX;
 		my -= windowY;
+#endif
 	}
 
 	mouse.rawX = mx;

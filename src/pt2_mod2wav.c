@@ -11,6 +11,9 @@
 #include <sys/stat.h> // stat()
 #ifndef _WIN32
 #include <unistd.h> // chdir()
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #endif
 #include "pt2_audio.h"
 #include "pt2_mouse.h"
@@ -255,6 +258,15 @@ static int32_t mod2WavThreadFunc(void *ptr)
 		// write buffer to disk
 		if (samplesInChunk > 0)
 			fwrite(mod2WavBuffer, sizeof (int16_t), samplesInChunk * 2, f);
+
+#ifdef __EMSCRIPTEN__
+		// We render synchronously on the main thread here (no worker threads),
+		// so drive the progress dialog and yield to the browser each chunk so
+		// the page stays responsive (needs ASYNCIFY).
+		updateMod2WavDialog();
+		flipFrame();
+		emscripten_sleep(0);
+#endif
 	}
 
 	ui.updateMod2WavDialog = true;
@@ -326,6 +338,31 @@ static int32_t mod2WavThreadFunc(void *ptr)
 		fclose(f);
 	}
 
+#ifdef __EMSCRIPTEN__
+	// Hand the finished .wav to the browser as a download (there's no host
+	// filesystem). Skip if the render was aborted.
+	if (!editor.abortMod2Wav)
+	{
+		EM_ASM({
+			var path = UTF8ToString($0);
+			try {
+				var data = FS.readFile(path);
+				var blob = new Blob([data.buffer], { type: 'audio/wav' });
+				var url = URL.createObjectURL(blob);
+				var a = document.createElement('a');
+				a.href = url;
+				a.download = path.split('/').pop();
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
+			} catch (e) {
+				console.error('MOD2WAV download failed:', e);
+			}
+		}, lastFilename);
+	}
+#endif
+
 	ui.mod2WavFinished = true;
 	ui.updateMod2WavDialog = true;
 
@@ -354,6 +391,14 @@ bool mod2WavRender(char *filename)
 	struct stat statBuffer;
 
 	lastFilename[0] = '\0'; // for rendering-thread
+
+#ifdef __EMSCRIPTEN__
+	// Render to /tmp (in-memory, not persisted to IDBFS). The .wav only exists
+	// to be handed to the browser as a download. filename is a bare basename.
+	char emccPath[PATH_MAX + 8];
+	snprintf(emccPath, sizeof emccPath, "/tmp/%s", filename);
+	filename = emccPath;
+#endif
 
 	assureModulesDir();
 
@@ -409,6 +454,15 @@ bool mod2WavRender(char *filename)
 	pointerSetMode(POINTER_MODE_MSG2, NO_CARRY);
 	setStatusMessage("RENDERING MOD...", NO_CARRY);
 
+#ifdef __EMSCRIPTEN__
+	// No worker threads in this build: render synchronously on the main thread.
+	// mod2WavThreadFunc() drives the progress dialog and yields to the browser
+	// each chunk (ASYNCIFY), writes the .wav, and triggers a browser download.
+	editor.mod2WavThread = NULL;
+	mod2WavThreadFunc(fOut);
+	updateMod2WavDialog(); // finalize: handleMod2WavEnd() (resetAudio/song, "MOD RENDERED!")
+	return true;
+#else
 	editor.mod2WavThread = SDL_CreateThread(mod2WavThreadFunc, "MOD2WAV thread", fOut);
 	if (editor.mod2WavThread == NULL)
 	{
@@ -429,6 +483,7 @@ bool mod2WavRender(char *filename)
 
 	SDL_DetachThread(editor.mod2WavThread);
 	return true;
+#endif
 }
 
 #define CALC__END_OF_SONG \

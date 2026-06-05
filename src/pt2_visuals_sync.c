@@ -167,7 +167,9 @@ void resetChSyncQueue(void)
 
 static int32_t chQueueReadSize(void)
 {
-	while (chQueueClearing);
+#ifndef __EMSCRIPTEN__
+	while (chQueueClearing); // cross-thread spin-wait; pointless and deadlock-prone single-threaded
+#endif
 
 	if (chSync.writePos > chSync.readPos)
 		return chSync.writePos - chSync.readPos;
@@ -313,9 +315,18 @@ void updateChannelSyncBuffer(void)
 
 	// handle channel sync queue
 
-	while (chQueueClearing);
+#ifndef __EMSCRIPTEN__
+	while (chQueueClearing); // cross-thread spin-wait; pointless and deadlock-prone single-threaded
+#endif
+#ifdef __EMSCRIPTEN__
+	uint32_t drainGuard = SYNC_QUEUE_LEN + 1; // bound the drain so a corrupt queue can't hang us
+#endif
 	while (chQueueReadSize() > 0)
 	{
+#ifdef __EMSCRIPTEN__
+		if (drainGuard-- == 0)
+			break; // bound the drain so a corrupt queue can't hang us
+#endif
 		if (frameTime64 < getChQueueTimestamp())
 			break; // we have no more stuff to render for now
 

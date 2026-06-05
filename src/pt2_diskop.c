@@ -110,6 +110,12 @@ static bool listEntry(fileEntry_t *f)
 	if (!UNICHAR_STRNICMP(f->nameU, ".", 1))
 		return false; // skip ".name" entries
 
+#ifdef __EMSCRIPTEN__
+	// Web build: always show the drag-and-drop hint placeholder file
+	if (!UNICHAR_STRCMP(f->nameU, "Drop Files Here"))
+		return true;
+#endif
+
 	if (f->isDir || diskop.mode == DISKOP_MODE_SMP)
 		return true; // list all entries
 
@@ -472,6 +478,16 @@ bool diskOpSetPath(UNICHAR *path, bool cache)
 
 void diskOpSetInitPath(void)
 {
+#ifdef __EMSCRIPTEN__
+	// In the browser there is no host filesystem. Point Disk Op at the
+	// IDBFS-backed persistent mount (created in JS preRun) so loaded/saved
+	// files are browsable and survive reloads. Ignore config dirs.
+	UNICHAR_STRCPY(editor.modulesPathU, "/persist/modules");
+	UNICHAR_STRCPY(editor.samplesPathU, "/persist/samples");
+	setPathFromDiskOpMode();
+	return;
+#endif
+
 	// default module path
 	if (config.defModulesDir[0] != '\0')
 	{
@@ -626,9 +642,16 @@ static bool diskOpFillBuffer(void)
 		diskop.numEntries++;
 	}
 
+#ifdef __EMSCRIPTEN__
+	uint32_t scanGuard = 0; // bound the scan so a corrupt dir can't hang us
+#endif
 	// read remaining files
 	while (lastFindFileFlag != LFF_DONE)
 	{
+#ifdef __EMSCRIPTEN__
+		if (++scanGuard > 200000)
+			break;
+#endif
 		lastFindFileFlag = findNext(&tmpBuffer);
 		if (lastFindFileFlag != LFF_DONE && lastFindFileFlag != LFF_SKIP)
 		{
@@ -762,6 +785,13 @@ void diskOpRenderFileList(void)
 	// if needed, update the file list and add entries
 	if (!diskop.cached)
 	{
+#ifdef __EMSCRIPTEN__
+		// This build has no worker threads, so SDL_CreateThread() would fail
+		// and the list would never fill. The virtual filesystem is in-memory,
+		// so just scan it synchronously and fall through to render it.
+		diskop.cached = true;
+		diskOpFillThreadFunc(NULL);
+#else
 		diskop.fillThread = SDL_CreateThread(diskOpFillThreadFunc, "file lister thread", NULL);
 		if (diskop.fillThread == NULL)
 			return;
@@ -770,6 +800,7 @@ void diskOpRenderFileList(void)
 		diskop.cached = true;
 
 		return;
+#endif
 	}
 
 	// clear list

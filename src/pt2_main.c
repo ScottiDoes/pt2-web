@@ -37,6 +37,10 @@
 #include "pt2_replayer.h"
 #include "pt2_textedit.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #define CRASH_TEXT "Oh no! The ProTracker 2 clone has crashed...\nA backup .mod was hopefully " \
                    "saved to the current module directory.\n\nPlease report this bug if you can.\n" \
                    "Try to mention what you did before the crash happened.\n" \
@@ -87,6 +91,7 @@ static void handleInput(void);
 static bool initializeVars(void);
 static void handleSigTerm(void);
 static void cleanUp(void);
+static void mainLoopIteration(void *arg);
 
 static void clearStructs(void)
 {
@@ -352,30 +357,84 @@ int main(int argc, char *argv[])
 	hpc_ResetCounters(&video.vblankHpc); // this must be the last thing we do before entering the main loop
 
 	// XXX: if you change anything in the main loop, make sure it goes in the askBox()(pt2_askbox.c) loop too, if needed
+
+#ifdef __EMSCRIPTEN__
+	// Don't return - JS drives the loop via requestAnimationFrame calling pt2_loop_iteration()
+	emscripten_exit_with_live_runtime();
+#else
 	while (editor.programRunning)
 	{
-		beginFPSCounter();
-		handleThreadedAskBox();
-		sinkVisualizerBars();
-		updateChannelSyncBuffer();
-		readMouseXY();
-		readKeyModifiers(); // set/clear CTRL/ALT/SHIFT/AMIGA key states
-		handleInput();
-		updateMouseCounters();
-		handleKeyRepeat(keyb.lastRepKey);
-
-		if (!mouse.buttonWaiting && ui.sampleMarkingPos == -1 && !ui.forceSampleDrag && !ui.forceVolDrag && !ui.forceSampleEdit)
-			handleGUIButtonRepeat();
-
-		renderFrame();
-		flipFrame();
-		endFPSCounter();
+		mainLoopIteration(NULL);
 	}
 
 	cleanUp();
 	SDL_Quit();
+#endif
 
 	return 0;
+}
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE
+void pt2_loop_iteration(void)
+{
+	// With ASYNCIFY, a modal dialog (askBox) or other blocking loop yields back
+	// to the browser mid-iteration, and requestAnimationFrame will call this
+	// again before the first call has returned. Guard against re-entering the
+	// main loop while a previous iteration is still suspended.
+	static bool inIteration = false;
+	if (inIteration)
+		return;
+
+	inIteration = true;
+	mainLoopIteration(NULL);
+	inIteration = false;
+}
+
+/* Called from JS after a picked file has been written into the Emscripten
+** filesystem. Reuses the existing drag-n-drop load path. The filename
+** (including extension) must be preserved so module type detection works.
+*/
+EMSCRIPTEN_KEEPALIVE
+void pt2_load_file(const char *path)
+{
+	if (path == NULL)
+		return;
+
+	loadDroppedFile((char *)path, (uint32_t)strlen(path), false, true);
+}
+
+/* Called from JS after a dropped file is written into the open directory, so
+** the Disk Op file list re-scans and shows it.
+*/
+EMSCRIPTEN_KEEPALIVE
+void pt2_refresh_diskop(void)
+{
+	diskop.cached = false;
+	ui.updateDiskOpFileList = true;
+}
+#endif
+
+static void mainLoopIteration(void *arg)
+{
+	(void)arg;
+
+	beginFPSCounter();
+	handleThreadedAskBox();
+	sinkVisualizerBars();
+	updateChannelSyncBuffer();
+	readMouseXY();
+	readKeyModifiers(); // set/clear CTRL/ALT/SHIFT/AMIGA key states
+	handleInput();
+	updateMouseCounters();
+	handleKeyRepeat(keyb.lastRepKey);
+
+	if (!mouse.buttonWaiting && ui.sampleMarkingPos == -1 && !ui.forceSampleDrag && !ui.forceVolDrag && !ui.forceSampleEdit)
+		handleGUIButtonRepeat();
+
+	renderFrame();
+	flipFrame();
+	endFPSCounter();
 }
 
 static void handleInput(void)
