@@ -20,6 +20,9 @@ void scopeTrigger(int32_t ch);
 
 int32_t getSampleReadPos(int32_t ch);
 void updateScopes(void);
+#ifdef __EMSCRIPTEN__
+void updateScopesFrame(void); // per-frame scope update (no scope thread in WASM build)
+#endif
 void drawScopes(void);
 bool initScopes(void);
 void stopScope(int32_t ch);

@@ -283,6 +283,19 @@ void drawScopes(void)
 	scopesDisplayingFlag = false;
 }
 
+#ifdef __EMSCRIPTEN__
+// There is no scope thread in this build (no pthreads). Call this once per
+// frame from the main loop instead. rAF (~60Hz) is close enough to SCOPE_HZ
+// (64Hz) that the scopes scroll at the right speed.
+void updateScopesFrame(void)
+{
+	if (config.realVuMeters)
+		updateRealVuMeters();
+
+	updateScopes();
+}
+#endif
+
 static int32_t scopeThreadFunc(void *ptr)
 {
 	// this is confirmed to be needed for scope stability

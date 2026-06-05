@@ -432,6 +432,13 @@ static void mainLoopIteration(void *arg)
 	if (!mouse.buttonWaiting && ui.sampleMarkingPos == -1 && !ui.forceSampleDrag && !ui.forceVolDrag && !ui.forceSampleEdit)
 		handleGUIButtonRepeat();
 
+#ifdef __EMSCRIPTEN__
+	// No scope thread in this build: advance the scopes/VU meters once per
+	// frame so the quadrascope animates smoothly instead of only updating on
+	// note triggers.
+	updateScopesFrame();
+#endif
+
 	renderFrame();
 	flipFrame();
 	endFPSCounter();
