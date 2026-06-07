@@ -2034,6 +2034,19 @@ bool setupVideo(void)
 		return false;
 	}
 
+#ifdef __EMSCRIPTEN__
+	/* In the browser, SDL would otherwise pick the "opengles2" renderer, which
+	** needs a WebGL context. That context can fail or be lost in real browsers
+	** (GPU process restarts, too many live contexts, hardware accel disabled),
+	** and SDL then crashes in GLES2 shader setup (glGetActiveAttrib on an
+	** undefined GL context). This app only blits a CPU-built framebuffer, so it
+	** does not need GPU acceleration. Force the software renderer (2D canvas)
+	** for robustness.
+	*/
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+	rendererFlags |= SDL_RENDERER_SOFTWARE;
+#endif
+
 	video.renderer = SDL_CreateRenderer(video.window, -1, rendererFlags);
 	if (video.renderer == NULL)
 	{
