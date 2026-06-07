@@ -1742,6 +1742,16 @@ void flipFrame(void)
 
 	eraseSprites();
 
+#ifdef __EMSCRIPTEN__
+	/* In the browser the main loop is driven by requestAnimationFrame, which
+	** already paces us to the display refresh rate. We must NOT call hpc_Wait()
+	** here: on the main thread usleep()/nanosleep() cannot yield to the browser
+	** and compile to a busy-wait spin on the performance counter, pegging a CPU
+	** core at 100% every frame. Let rAF handle the timing instead.
+	*/
+	(void)minimized;
+	(void)windowFlags;
+#else
 	if (!video.vsync60HzPresent)
 	{
 		// we have no VSync, do crude thread sleeping to sync to ~60Hz
@@ -1765,6 +1775,7 @@ void flipFrame(void)
 			hpc_Wait(&video.vblankHpc);
 #endif
 	}
+#endif
 
 	editor.framesPassed++;
 

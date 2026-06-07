@@ -28,13 +28,23 @@ The original pt2-clone is a native SDL2 desktop app. This fork adapts it for the
 ### Build command
 
 ```bash
-emcc src/*.c src/gfx/*.c src/smploaders/*.c \
+emcc src/*.c src/gfx/*.c src/smploaders/*.c src/modloaders/*.c \
+  -O2 \
   -s USE_SDL=2 \
   -s ASYNCIFY \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s EXPORTED_FUNCTIONS='["_pt2_loop_iteration","_pt2_load_file","_pt2_refresh_diskop","_main"]' \
+  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","FS","callMain"]' \
+  -lidbfs.js \
+  -I src \
   -o pt2.html
 ```
+
+Notes:
+
+- All four source directories must be included — omitting `src/modloaders/*.c` causes link errors.
+- `-lidbfs.js` is required for the IDBFS (IndexedDB) persistence of `/persist/modules` and `/persist/samples`.
+- `EXPORTED_RUNTIME_METHODS` exposes `ccall`/`cwrap`/`FS`/`callMain` so the host page can call the exported entry points and write picked files into the virtual filesystem.
 
 *(Adjust flags and source files to match your actual build setup.)*
 

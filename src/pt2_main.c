@@ -386,6 +386,30 @@ void pt2_loop_iteration(void)
 	if (inIteration)
 		return;
 
+	/* requestAnimationFrame fires at the display refresh rate, which may be
+	** higher than 60Hz (e.g. 120/144Hz monitors). ProTracker's timing assumes
+	** a fixed VBLANK_HZ (60Hz) tick, so we must pace ourselves to that rate
+	** rather than running once per rAF callback. Skip iterations that arrive
+	** too early; this keeps song/visual speed correct and avoids wasted work.
+	*/
+	const double frameIntervalMs = 1000.0 / (double)VBLANK_HZ;
+	static double nextFrameTimeMs = -1.0;
+
+	// half-frame slack so rAF jitter on a 60Hz display doesn't drop us to 30fps
+	const double toleranceMs = frameIntervalMs * 0.5;
+
+	const double nowMs = emscripten_get_now();
+	if (nextFrameTimeMs < 0.0)
+		nextFrameTimeMs = nowMs; // first call: run immediately, then schedule
+
+	if (nowMs < nextFrameTimeMs - toleranceMs)
+		return; // too early for the next 60Hz tick
+
+	// advance schedule; if we've fallen far behind, resync to avoid bursts
+	nextFrameTimeMs += frameIntervalMs;
+	if (nextFrameTimeMs < nowMs - frameIntervalMs)
+		nextFrameTimeMs = nowMs + frameIntervalMs;
+
 	inIteration = true;
 	mainLoopIteration(NULL);
 	inIteration = false;
@@ -412,6 +436,15 @@ void pt2_refresh_diskop(void)
 {
 	diskop.cached = false;
 	ui.updateDiskOpFileList = true;
+}
+
+/* DEBUG: lets the JS test harness verify the real 60Hz tracker tick rate
+** (rather than the requestAnimationFrame rate). Safe to leave in / remove.
+*/
+EMSCRIPTEN_KEEPALIVE
+uint32_t pt2_get_frames_passed(void)
+{
+	return editor.framesPassed;
 }
 #endif
 
