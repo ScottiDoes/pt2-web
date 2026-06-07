@@ -36,6 +36,36 @@
 #include "pt2_askbox.h"
 #include "pt2_replayer.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+// Web build: read a file from the Emscripten VFS and hand it to the browser as
+// a Save-As download (there is no host filesystem). Relative paths resolve
+// against the VFS cwd (the chdir'd /persist dir). mime e.g.
+// "application/octet-stream", "audio/wav", "audio/x-aiff".
+void pt2WebDownloadFile(const char *vfsPath, const char *mime)
+{
+	EM_ASM({
+		var path = UTF8ToString($0);
+		var mime = UTF8ToString($1);
+		try {
+			var data = FS.readFile(path);
+			var blob = new Blob([data.buffer], { type: mime || 'application/octet-stream' });
+			var url = URL.createObjectURL(blob);
+			var a = document.createElement('a');
+			a.href = url;
+			a.download = path.split('/').pop();
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
+		} catch (e) {
+			console.error('download failed for', path, e);
+		}
+	}, vfsPath, mime);
+}
+#endif
+
 typedef struct fileEntry_t
 {
 	UNICHAR *nameU;

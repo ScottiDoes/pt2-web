@@ -24,6 +24,7 @@
 #include "pt2_config.h"
 #include "pt2_askbox.h"
 #include "pt2_replayer.h"
+#include "pt2_diskop.h"
 
 #define FADEOUT_CHUNK_SAMPLES 16384
 #define TICKS_PER_RENDER_CHUNK 64
@@ -342,25 +343,7 @@ static int32_t mod2WavThreadFunc(void *ptr)
 	// Hand the finished .wav to the browser as a download (there's no host
 	// filesystem). Skip if the render was aborted.
 	if (!editor.abortMod2Wav)
-	{
-		EM_ASM({
-			var path = UTF8ToString($0);
-			try {
-				var data = FS.readFile(path);
-				var blob = new Blob([data.buffer], { type: 'audio/wav' });
-				var url = URL.createObjectURL(blob);
-				var a = document.createElement('a');
-				a.href = url;
-				a.download = path.split('/').pop();
-				document.body.appendChild(a);
-				a.click();
-				document.body.removeChild(a);
-				setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
-			} catch (e) {
-				console.error('MOD2WAV download failed:', e);
-			}
-		}, lastFilename);
-	}
+		pt2WebDownloadFile(lastFilename, "audio/wav");
 #endif
 
 	ui.mod2WavFinished = true;

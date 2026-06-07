@@ -11,6 +11,7 @@
 #include "pt2_sampler.h"
 #include "pt2_config.h"
 #include "pt2_askbox.h"
+#include "pt2_diskop.h"
 
 bool modSave(char *fileName)
 {
@@ -105,6 +106,12 @@ bool modSave(char *fileName)
 	}
 
 	fclose(f);
+
+#ifdef __EMSCRIPTEN__
+	// Web build: also deliver the saved .mod to the user's computer as a
+	// browser download (the VFS-only save isn't reachable otherwise).
+	pt2WebDownloadFile(fileName, "application/octet-stream");
+#endif
 
 	displayMsg("MODULE SAVED !");
 	setMsgPointer();

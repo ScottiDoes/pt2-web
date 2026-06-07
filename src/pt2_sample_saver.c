@@ -262,6 +262,22 @@ bool saveSample(bool checkIfFileExist, bool giveNewFreeFilename)
 
 	fclose(f);
 
+#ifdef __EMSCRIPTEN__
+	// Web build: also deliver the saved sample to the user's computer as a
+	// browser download, with a MIME matching the chosen format.
+	{
+		const char *mime;
+		switch (diskop.smpSaveType)
+		{
+			case DISKOP_SMP_IFF: mime = "audio/x-aiff"; break;
+			case DISKOP_SMP_RAW: mime = "application/octet-stream"; break;
+			default:
+			case DISKOP_SMP_WAV: mime = "audio/wav"; break;
+		}
+		pt2WebDownloadFile(fileName, mime);
+	}
+#endif
+
 	displayMsg("SAMPLE SAVED !");
 	setMsgPointer();
 

@@ -33,3 +33,6 @@ bool changePathToHome(void);
 #endif
 void renderDiskOpScreen(void);
 void updateDiskOp(void);
+#ifdef __EMSCRIPTEN__
+void pt2WebDownloadFile(const char *vfsPath, const char *mime);
+#endif
